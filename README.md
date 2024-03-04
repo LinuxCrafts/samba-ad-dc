@@ -83,9 +83,9 @@ If $DNS_DOMAIN is not supplied the /samba-ad-dc script will first attempt to get
 |------|----------|-------------|
 | 53 | TCP/UDP | DNS Server |
 | 88 | TCP/UDP | Kerberos Server | 
-| 135 | TCP | SMB Protocol | 
+| 135 | TCP | MS RPC client-server communication | 
 | 389 | TCP/UDP | LDAP Server | 
-| 445 | TCP | SMB Protocol | 
+| 445 | TCP | SMB Authentication and File Sharing | 
 | 464 | TCP/UDP | Kerberos Change/Set Password |
 | 636 | TCP | LDAP over SSL |
 | 3268 | TCP | Catalog | 
