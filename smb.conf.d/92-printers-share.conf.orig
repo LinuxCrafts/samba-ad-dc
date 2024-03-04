@@ -1,0 +1,3 @@
+[printers]
+       path = /var/tmp/
+       printable = yes

@@ -1,0 +1,163 @@
+#!/bin/sh -e
+# MIT License https://opensource.org/licenses/MIT
+# Copyright (c) LinuxCrafts <craftslinux@gmail.com>
+# Mantainer: Harol Hunter <hhuntercu.devops@gmail.com>
+
+
+######################### DEFINITIONS #######################
+
+# Setting ENV variables
+DOMAIN_CONFIG_FILE="/samba/etc/smb.conf.d/00-domain.conf"
+SAMBA_CONFIG_FILE="/samba/etc/smb.conf"
+DNS_DOMAIN=${DNS_DOMAIN:=$(hostname -d)}
+DNS_DOMAIN=${DNS_DOMAIN:=$(grep search /etc/resolv.conf | cut -f2 -d" ")}
+DNS_DOMAIN=${DNS_DOMAIN:=$(echo ${REALM} | cut -f1 -d. | tr a-z A-Z)}
+DNS_DOMAIN=${DNS_DOMAIN:=$(grep realm $DOMAIN_CONFIG_FILE | cut -f2 -d"=" | tr A-Z a-z)}
+DNS_DOMAIN=${DNS_DOMAIN:="my.company.tld"}
+DNS_FORWARDER=${DNS_FORWARDER:=$(grep nameserver /etc/resolv.conf | cut -f2 -d" ")}
+WORKGROUP=${WORKGROUP:=$(echo ${DNS_DOMAIN} | cut -f1 -d. | tr a-z A-Z)}
+REALM=${REALM:=$(echo ${DNS_DOMAIN} | tr a-z A-Z)}
+NETBIOS_NAME=${NETBIOS_NAME:=$(echo ${HOSTNAME} | tr a-z A-Z)}
+DNS_BACKEND=${DNS_BACKEND:="SAMBA_INTERNAL"}
+FUNCTION_LEVEL=${FUNCTION_LEVEL:="2008_R2"}
+ROLE=${ROLE:="dc"}
+BACKEND_STORE=${BACKEND_STORE:="tdb"}
+ENABLE_USER_PROFILES=${ENABLE_USER_PROFILES:=false}
+
+if [ $DNS_FORWARDER = "127.0.0.1" ]; then
+    DNS_FORWARDER= ""
+fi
+    
+
+# Filling smb.conf
+function write_smb_conf() { 
+    #rm -f /samba/etc/smb.conf /etc/samba/smb.conf
+
+    echo "workgroup = ${WORKGROUP}" > $DOMAIN_CONFIG_FILE
+    echo "realm = ${REALM}" >> $DOMAIN_CONFIG_FILE
+    echo "netbios name = ${NETBIOS_NAME}" >> $DOMAIN_CONFIG_FILE
+
+    if [ $DNS_FORWARDER != "127.0.0.1" ]; then
+        echo "dns forwarder = ${DNS_FORWARDER}" >> $DOMAIN_CONFIG_FILE
+    fi
+
+    # Enable user profiles shares in server
+    if [ $ENABLE_USER_PROFILES ]; then
+        mkdir -p -m 2750 /users/
+        chmod 2750 /users/
+        mv /samba/etc/smb.conf.d/93-users-profiles.conf.orig /samba/etc/smb.conf.d/93-users-profiles.conf
+    fi
+
+    rm -f /samba/etc/smb.conf.d/includes
+    for custom_conf in $(ls -1 /samba/etc/smb.conf.d/*.conf); do 
+        echo "include = $custom_conf" >> /samba/etc/smb.conf.d/includes
+    done   
+}
+
+
+# Provisioning Samba4 AD DC
+function provision_domain() {
+    touch /tmp/smb.conf
+
+    #    --host-ip=$(hostname -i) \
+    samba-tool domain provision -q -d0 \
+        --use-rfc2307 \
+        --dns-backend=${DNS_BACKEND} \
+        --domain=${WORKGROUP} \
+        --realm=${REALM} \
+        --host-name=${NETBIOS_NAME} \
+        --server-role=${ROLE} \
+        --function-level=${FUNCTION_LEVEL} \
+        --configfile /tmp/smb.conf \
+        --backend-store=${BACKEND_STORE} \
+        --targetdir=/samba \
+        --adminpass=${ADMIN_PASSWORD} > /dev/null 2>&1
+}
+
+
+# Provisiong Reverse DNS zone
+    function setting_dns() {
+    
+    DNS_REVERSE_ZONE=${DNS_REVERSE_ZONE:=$(hostname -i | awk -F. '{print $3"."$2"."$1".in-addr.arpa"}')}
+    samba-tool dns zonecreate \
+        ${HOSTNAME}.${DNS_DOMAIN} ${DNS_REVERSE_ZONE} \
+        -U administrator --password="${ADMIN_PASSWORD}" >/dev/null 2>&1
+    samba-tool dns add \
+        ${HOSTNAME}.${DNS_DOMAIN} ${DNS_REVERSE_ZONE} \
+        $(hostname -i | awk -F. '{print $4}') PTR ${HOSTNAME}.${DNS_DOMAIN} \
+        -U administrator --password="${ADMIN_PASSWORD}" >/dev/null 2>&1
+
+    # Disabling WPAD and ISATAP DNS records for security reasons
+    samba-tool dns add ${HOSTNAME} ${DNS_DOMAIN} wpad A 127.0.0.1 -P \
+    -U administrator --password="${ADMIN_PASSWORD}" >/dev/null 2>&1
+    samba-tool dns add ${HOSTNAME} ${DNS_DOMAIN} isatap A 127.0.0.1 -P \
+    -U administrator --password="${ADMIN_PASSWORD}" >/dev/null 2>&1
+    
+ 
+}
+
+##################################################################################
+
+mkdir -p /samba/log
+mkdir -p /samba/lock
+mkdir -p /samba/state
+mkdir -p /samba/cache
+mkdir -p /samba/private/tls
+mkdir -p /bind-dns
+mkdir -p -m 0750 /ntp_signd
+chmod 0750 /ntp_signd
+
+# Adding localhost to resolv.conf 
+echo -n "Regenerating resolv.conf ... "
+
+echo "search ${DNS_DOMAIN}" > /etc/resolv.conf
+echo "nameserver 127.0.0.1" >> /etc/resolv.conf
+echo "nameserver $(hostname -i)" >> /etc/resolv.conf
+if [ -n "$DNS_FORWARDER" ]; then
+    echo "nameserver ${DNS_FORWARDER}" >> /etc/resolv.conf
+fi
+
+echo -e "\e[32m[DONE]\e[0m"
+
+# Write local info to smb.conf
+if [ ! -s $DOMAIN_CONFIG_FILE ]; then
+    echo -n "Writing samba settings ... "
+    write_smb_conf
+    echo -e "\e[32m[DONE]\e[0m"
+fi
+
+# Provision samba domain
+if [ ! -e /samba/private/secrets.tdb ]; then
+    echo "Provisioning Samba Domain ... "
+    provision_domain 
+    echo "Provision Completed."
+fi
+
+# Provision DNS reverse zone
+    # Samba needs to be running
+samba -D -s $SAMBA_CONFIG_FILE
+
+# Waiting for Samba daemon
+sleep 3s    
+REVERSE_ZONES_COUNT=$(samba-tool dns zonelist \
+    --reverse -U administrator \
+    --password="${ADMIN_PASSWORD}" 127.0.0.1  | head -n1 | cut -f3 -d" ") 2>/dev/null
+if [ $REVERSE_ZONES_COUNT = "0" ]; then
+    echo -n "Provisioning DNS Reverse Zone ... "
+    setting_dns 
+    echo -e "\e[32m[DONE]\e[0m"
+fi
+# Stopping previous instance of Samba
+kill $(cat /var/run/samba/samba.pid)
+
+
+# Starting samba
+echo "Starting samba daemon" 
+
+if [ $# -eq 0 ]; then
+    samba -i -s $SAMBA_CONFIG_FILE -d4
+else
+    # Runs user supplied command ex. /bin/sh
+    #samba -D -s $SAMBA_CONFIG_FILE
+    exec "$@"
+fi
