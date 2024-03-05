@@ -25,8 +25,14 @@ jobs:
             --build-arg VERSION=$GITHUB_REF_NAME \
             --build-arg BUILD_DATE=$(date +%s) \
             -t linuxcrafts/samba-ad-dc:latest \
-            -t linuxcrafts/samba-ad-dc:$GITHUB_REF_NAME \
+            --push \
             .
+            docker buildx build --platform linux/amd64,linux/arm64 \
+            --build-arg VERSION=$GITHUB_REF_NAME \
+            --build-arg BUILD_DATE=$(date +%s) \
+            -t linuxcrafts/samba-ad-dc:$GITHUB_REF_NAME \
+            --push \
+            .            
         env:
           GITHUB_REF_NAME: ${{ github.ref }}
       
