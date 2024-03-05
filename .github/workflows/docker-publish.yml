@@ -21,9 +21,9 @@ jobs:
 
       - name: Login into Docker Hub
         run: 
-          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login \
+          docker login \
             -u "${{ secrets.DOCKER_USERNAME }}" \
-            --password-stdin \
+            -p ${{ secrets.DOCKER_PASSWORD }} \
             registry-1.docker.io/linuxcrafts             
 
       - name: Build Docker Image
