@@ -18,7 +18,17 @@ jobs:
         
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
-      
+
+      - name: Login into Docker Hub
+        run: 
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login \
+            registry-1.docker.io/linuxcrafts \
+            -u "${{ secrets.DOCKER_USERNAME }}" \
+            --password-stdin
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}   
+
       - name: Build Docker Image
         run: |
           docker buildx build --platform linux/amd64,linux/arm64 \
@@ -38,8 +48,9 @@ jobs:
       
       - name: Push Docker Image
         run: |
-          docker push linuxcrafts/samba-ad-dc:latest
+          docker push linuxcrafts/samba-ad-dc:latest -u $DOCKER_USERNAME -
           docker push linuxcrafts/samba-ad-dc:$GITHUB_REF_NAME
+          - name: login to docker hub
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
