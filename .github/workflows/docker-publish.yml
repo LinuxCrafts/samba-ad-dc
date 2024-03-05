@@ -3,7 +3,10 @@ name: Build and Push Docker Image
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*'          # Match tags starting with 'v'
+    branches:
+      - master      
+  workflow_dispatch:  # Manually trigger the workflow
 
 jobs:
   build:
