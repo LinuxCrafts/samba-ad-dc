@@ -61,8 +61,7 @@ You can check smb.conf manual page for more options on [Samba Project's official
 ## Environment Variables
 
 
-The following environment variables are available for your configuration
-pleasure:
+The following environment variables are available for your configuration pleasure:
 
 | NAME | DEFAULT VALUE | DESCRIPTION |
 |------|---------|-------------|
@@ -119,3 +118,6 @@ Contributions to improve this Docker container are welcome! If you find any issu
 
 ## License
 This project is licensed under the [MIT License](https://opensource.org/licenses/MIT). Feel free to use, modify, and distribute this code for your own projects.
+
+## Disclaimer:
+The Docker image repository is provided as-is, and users should review and understand the configurations and dependencies before deploying Samba AD DC instances in production environments.

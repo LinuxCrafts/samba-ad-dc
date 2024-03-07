@@ -18,21 +18,19 @@ jobs:
         
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
-
+        
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+        
       - name: Build Docker Image
         run: |
           docker buildx build --platform linux/amd64,linux/arm64 \
             --build-arg VERSION=$GITHUB_REF_NAME \
             --build-arg BUILD_DATE=$(date +%s) \
             -t linuxcrafts/samba-ad-dc:latest \
-            --push \
-            .
-            docker buildx build --platform linux/amd64,linux/arm64 \
-            --build-arg VERSION=$GITHUB_REF_NAME \
-            --build-arg BUILD_DATE=$(date +%s) \
             -t linuxcrafts/samba-ad-dc:$GITHUB_REF_NAME \
             --push \
-            .            
+            .
         env:
           GITHUB_REF_NAME: ${{ github.ref }}
       
