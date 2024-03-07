@@ -1,5 +1,5 @@
 # Use Alpine Linux as the base image
-FROM alpine:latest
+FROM alpine:3.18
 
 ARG BUILD_DATE
 ARG VERSION
@@ -22,7 +22,7 @@ RUN apk --no-cache --no-progress --update add samba-dc && \
 EXPOSE 53 53/udp 88 88/udp 135 389 389/udp 445 464 464/udp 636 3268 3269 50000-55000
 
 # Using persistent volumes to store Samba files
-VOLUME [ "/samba", "/bind-dns", "/ntp_signd" ]
+VOLUME [ "/samba", "/bind-dns", "/ntp_signd" "/user"]
 
 HEALTHCHECK --interval=60s --timeout=15s --start-period=60s --retries=3  \
             CMD smbclient -L \\localhost -U % -m SMB3

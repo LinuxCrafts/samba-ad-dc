@@ -22,7 +22,7 @@ DNS_BACKEND=${DNS_BACKEND:="SAMBA_INTERNAL"}
 FUNCTION_LEVEL=${FUNCTION_LEVEL:="2008_R2"}
 ROLE=${ROLE:="dc"}
 BACKEND_STORE=${BACKEND_STORE:="tdb"}
-ENABLE_USER_PROFILES=${ENABLE_USER_PROFILES:=false}
+ENABLE_ROAMING_PROFILES=${ENABLE_ROAMING_PROFILES:=false}
 
 if [ $DNS_FORWARDER = "127.0.0.1" ]; then
     DNS_FORWARDER= ""
@@ -42,7 +42,7 @@ function write_smb_conf() {
     fi
 
     # Enable user profiles shares in server
-    if [ $ENABLE_USER_PROFILES ]; then
+    if [ $ENABLE_ROAMING_PROFILES ]; then
         mkdir -p -m 2750 /users/
         chmod 2750 /users/
         mv /samba/etc/smb.conf.d/93-users-profiles.conf.orig /samba/etc/smb.conf.d/93-users-profiles.conf
@@ -96,68 +96,99 @@ function provision_domain() {
  
 }
 
+
+function setup () {
+    mkdir -p /samba/log
+    mkdir -p /samba/lock
+    mkdir -p /samba/state
+    mkdir -p /samba/cache
+    mkdir -p /samba/private/tls
+    mkdir -p /bind-dns
+    mkdir -p -m 0750 /ntp_signd
+    chmod 0750 /ntp_signd
+
+    # Adding localhost to resolv.conf 
+    echo -n "Regenerating resolv.conf ... "
+
+    echo "search ${DNS_DOMAIN}" > /etc/resolv.conf
+    echo "nameserver 127.0.0.1" >> /etc/resolv.conf
+    echo "nameserver $(hostname -i)" >> /etc/resolv.conf
+    if [ -n "$DNS_FORWARDER" ]; then
+        echo "nameserver ${DNS_FORWARDER}" >> /etc/resolv.conf
+    fi
+
+    echo -e "\e[32m[DONE]\e[0m"
+
+    # Write local info to smb.conf
+    if [ ! -s $DOMAIN_CONFIG_FILE ]; then
+        echo -n "Writing samba settings ... "
+        write_smb_conf
+        echo -e "\e[32m[DONE]\e[0m"
+    fi
+
+    # Provision samba domain
+    if [ ! -e /samba/private/secrets.tdb ]; then
+        echo "Provisioning Samba Domain ... "
+        provision_domain 
+        echo "Provision Completed."
+    fi
+
+    # Provision DNS reverse zone
+    # Samba needs to be running
+    samba -D -s $SAMBA_CONFIG_FILE
+
+    # Waiting for Samba daemon
+    sleep 3s    
+    REVERSE_ZONES_COUNT=$(samba-tool dns zonelist \
+        --reverse -U administrator \
+        --password="${ADMIN_PASSWORD}" 127.0.0.1  | head -n1 | cut -f3 -d" ") 2>/dev/null
+    if [ $REVERSE_ZONES_COUNT = "0" ]; then
+        echo -n "Provisioning DNS Reverse Zone ... "
+        setting_dns 
+        echo -e "\e[32m[DONE]\e[0m"
+    fi
+    # Stopping previous instance of Samba
+    kill $(cat /var/run/samba/samba.pid)    
+}
+
+function start () {
+    samba -i -s $SAMBA_CONFIG_FILE
+}
+
+function debug () {
+    samba -i -s $SAMBA_CONFIG_FILE -d4
+}
+
 ##################################################################################
 
-mkdir -p /samba/log
-mkdir -p /samba/lock
-mkdir -p /samba/state
-mkdir -p /samba/cache
-mkdir -p /samba/private/tls
-mkdir -p /bind-dns
-mkdir -p -m 0750 /ntp_signd
-chmod 0750 /ntp_signd
 
-# Adding localhost to resolv.conf 
-echo -n "Regenerating resolv.conf ... "
-
-echo "search ${DNS_DOMAIN}" > /etc/resolv.conf
-echo "nameserver 127.0.0.1" >> /etc/resolv.conf
-echo "nameserver $(hostname -i)" >> /etc/resolv.conf
-if [ -n "$DNS_FORWARDER" ]; then
-    echo "nameserver ${DNS_FORWARDER}" >> /etc/resolv.conf
-fi
-
-echo -e "\e[32m[DONE]\e[0m"
-
-# Write local info to smb.conf
-if [ ! -s $DOMAIN_CONFIG_FILE ]; then
-    echo -n "Writing samba settings ... "
-    write_smb_conf
-    echo -e "\e[32m[DONE]\e[0m"
-fi
-
-# Provision samba domain
-if [ ! -e /samba/private/secrets.tdb ]; then
-    echo "Provisioning Samba Domain ... "
-    provision_domain 
-    echo "Provision Completed."
-fi
-
-# Provision DNS reverse zone
-    # Samba needs to be running
-samba -D -s $SAMBA_CONFIG_FILE
-
-# Waiting for Samba daemon
-sleep 3s    
-REVERSE_ZONES_COUNT=$(samba-tool dns zonelist \
-    --reverse -U administrator \
-    --password="${ADMIN_PASSWORD}" 127.0.0.1  | head -n1 | cut -f3 -d" ") 2>/dev/null
-if [ $REVERSE_ZONES_COUNT = "0" ]; then
-    echo -n "Provisioning DNS Reverse Zone ... "
-    setting_dns 
-    echo -e "\e[32m[DONE]\e[0m"
-fi
-# Stopping previous instance of Samba
-kill $(cat /var/run/samba/samba.pid)
-
+setup
 
 # Starting samba
 echo "Starting samba daemon" 
-
 if [ $# -eq 0 ]; then
-    samba -i -s $SAMBA_CONFIG_FILE -d4
+    start 
 else
-    # Runs user supplied command ex. /bin/sh
-    #samba -D -s $SAMBA_CONFIG_FILE
-    exec "$@"
+    if [ $1 = "-" ]; then
+        ACTION=$2
+    else
+        ACTION=$1
+    fi
+
+    case "${ACTION}" in
+        setup)
+            setup
+        ;;
+        start)
+            start
+        ;;
+        debug)
+            debug
+        ;;        
+        *)
+            samba -D -s $SAMBA_CONFIG_FILE
+            exec "$@"
+        ;;
+    esac
 fi
+exit 0

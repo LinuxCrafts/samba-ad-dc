@@ -1,59 +1,113 @@
-# Docker - Samba4 Active Directory Domain Controller
+# Docker Files for Building Samba4 Active Directory Domain Controller
+
+This repository contains Docker files used to build a working [Samba 4](htts://www.samba.org/) _**Active Directory Domain Controller (AC DC)**_.  
+You can use them to build images locally with desired modifications.
+
+This Dockerfile and samba-ad-dc on Docker Hub image are based on Alpine Linux 3.18 image.
+
+
+Table of contents:
+1. [For Impatients](#for-impatients)
+1. [Using samba-ad-dc from Docker Hub](#using-samba-ad-dc-image-on-docker-hub)
+    * [Requirements](#requirements)
+    * [Volumes](#volumes)
+    * [Environment Variables](#environment-variables)
+    * [Exposed Ports](#exposed-ports)
+    * [Examples](#examples)
+1. [Building the Image](#building-the-image)
+    * [Downloading required files](#downloading-required-files)
+    * [Building your custom image](#building-your-custom-image)
+    * [Preparing the Volumes](#preparing-the-volumes)
+    * [Running the Image](#running-the-image)
+1. [References](#references)
+1. [Other](#other)
+    * [Troubleshooting](#troubleshooting)
+    * [Bug Tracker](#bug-tracker)
+    * [Maintainer](#maintainer)
+    * [Contributing](#contributing)
+    * [License](#license)
+    * [Disclaimer](#disclaimer)
 
 
 
-## Overview
-This repository provides a self-contained fully automated, easy to setup Docker container to run a [Samba 4](htts://www.samba.org/) _**Active Directory Domain Controller (AC DC)**_.  
+# For Impatients
 
+Are you itching to get your samba-ad-dc container up and running ASAP? Then this section is for you:
 
-## Quick Start
-
-### Build
+Minimal run
 ```bash
-$ git clone https://github.com/LinuxCrafts/samba-ad-dc.git samba-ad-dc
-$ docker build samba-ad-dc -t samba-ad-dc:custom
-```
-
-
-## Usage
-
-### First run
-```bash
-$ docker run \
-    --env "ADMIN_PASSWORD=Re4lly_Str0ng_Passw0rd" \
-    --volume /path/to/samba/dir:/samba \
+$ docker run --name samba-ad-dc \
     --cap-add SYS_ADMIN \
+    --volume SAMBA_VOL \
+    --env DNS_DOMAIN="my.domain.tld" \
+    --env ADMIN_PASSWORD="Str0ng_Passw0rd" \
     linuxcrafts/samba-ad-dc:latest
 ```
-When the container is run for ther first time it will launch the domain provision script, after that invoke it with the following command.
 
-```bash
-$ docker run --restart always \
-    --detach \
-    --volume /path/to/samba/dir:/samba \
-    --cap-add SYS_ADMIN \
-    linuxcrafts/samba-ad-dc:latest
+
+# Using samba-ad-dc image on Docker Hub
+
+
+### LinuxCrafts Repository on Docker Hub
+
+samba-ad-dc images are published on Docker Hub: https://hub.docker.com/repository/docker/linuxcrafts/samba-ad-dc
+
+You can refer to images using this naming pattern:
 ```
-* **Note:** Usage of switch --cap-add _SYS_ADMIN_ is mandatory.
+docker run linuxcrafts/samba-ad-dc:[VERSION]
+```
 
-### Persisting Data
-To persist data (such as user accounts, groups or logs) beyond container restarts, you can mount a volume to the container's /samba directory. You can learn more about volumes in [Docker's Official Documentation](https://docs.docker.com/storage/volumes/)
+Replace `[VERSION]` with the numerical version or appropriate tag or leave it blank for default tag `latest`
 
-To create a persisten volume for container
+For example:
+```
+docker run linuxcrafts/samba-ad-dc:v0.11
+```
+
+## Requirements
+
+Samba4-ad-dc may run _out of the box_ but you will probably want to set your own configuration. A static IP, and DNS Domain are recomended, an `ADMIN_PASSWORD` is mandatory though. 
+
+The use of elevated privileges is needed by samba to apply proper permission to SMB (CIFS) shares, which can be accomplished by using the parameter `--cap-add SYS_ADMIN` when running image
+
+
+## Volumes
+
+
+To persist data (such as user accounts, groups or logs) beyond container restarts, you can mount a volume to container's /samba directory. You can learn more about volumes in [Docker's Official Documentation](https://docs.docker.com/storage/volumes/)
+
+To create a managed volume for container
 
 ```bash
-$ docker volume create SAMBA_VOLUME
+$ docker volume create CONTAINER_NAME
+```
+
+You can use this parameter for the `docker run` command then:
+```bash 
+--volume=CONTAINER_NAME:container_path
+```
+Ex.
+```bash
+--volume=CONTAINER_NAME:/samba
+```
+
+It's recommended for easily management to create a volume group and then add/join samba volumes to it
+
+```bash
+$ docker volume create --group SAMBA_VOLUMES
+$ docker volume create CONTAINER_NAME --group SAMBA_VOLUMES
 ```
 
 
 | NAME | LOCATION | CONTENT |
 |------|-------|-------------|
 | SAMBA | /samba | Samba settings, logs, data and runtime files |
-| BIND-DNS| /bind-dns | Samba integration with bind9 dns service
-| NTP | /ntp_signd | Samba secure socket for NTP
+| BIND-DNS| /bind-dns | Samba integration with bind9 dns service | 
+| NTP | /ntp_signd | Samba secure socket for NTP |
+| USERS | /users | Users' roaming profiles | 
 
 DO NOT EDIT /samba/etc/smb.conf, place your custom settings under /samba/etc/smb.conf.d/
-. You can use overwrite any previous setting by editing /samba/etc/smb.conf.d/59-custom.conf for convienience and 99-custom_shares.conf to add new shares.
+. You can use overwrite any previous setting by editing /samba/etc/smb.conf.d/59-custom.conf provided for convienience and 99-custom_shares.conf to add new shares.
 
 You can check smb.conf manual page for more options on [Samba Project's official web site](https://www.samba.org/samba/docs/current/man-html/smb.conf.5.html)
 
@@ -61,7 +115,7 @@ You can check smb.conf manual page for more options on [Samba Project's official
 ## Environment Variables
 
 
-The following environment variables are available for your configuration pleasure:
+The following environment variables are available for your configuration:
 
 | NAME | DEFAULT VALUE | DESCRIPTION |
 |------|---------|-------------|
@@ -74,10 +128,18 @@ The following environment variables are available for your configuration pleasur
 | DNS_BACKEND | SAMBA_INTERNAL | DNS server backend (SAMBA_INTERNAL, BIND9_FLATFILE, BIND9_DLZ)
 | FUNCTION_LEVEL | 2008_R2 | Domain and forest function level ( 2000, 2003, 2008, 2008_R2 )
 | BACKEND_STORE| tdb | Specify the database backend to be used |
+| ENABLE_ROAMING_PROFILES | false | Enable/Disable users roaming profiles |
 
-If $DNS_DOMAIN is not supplied the /samba-ad-dc script will first attempt to get the value from hostname -d; if empty then will look for it in /etc/resolv.conf, else if $REALM is supplied it will lowerc
 
-## Exposed ports
+Samba will need a DNS Domain to work, if not supplied as ENV variable on running the container then this action will be taken in order until $DNS_DOMAIN is defined:
+
+* Look for `hostname` defined `dns domain` ( `hostname -d` )
+* Look for first value of `SEARCH`  variable in `/etc/resolv.conf` ( supplied through `--dns-domain` parameter to `docker run` command)
+* If `ENV $REALM`  variable is supplied then lowercase its value
+* Look into `smb.conf` for `realm` value then lowercase
+* Default to my.company.tld
+
+# Exposed Ports
 | PORT | PROTOCOL | DESCRIPTION | 
 |------|----------|-------------|
 | 53 | TCP/UDP | DNS Server |
@@ -85,39 +147,108 @@ If $DNS_DOMAIN is not supplied the /samba-ad-dc script will first attempt to get
 | 135 | TCP | MS RPC client-server communication | 
 | 389 | TCP/UDP | LDAP Server | 
 | 445 | TCP | SMB Authentication and File Sharing | 
-| 464 | TCP/UDP | Kerberos Change/Set Password |
+| 464 | TCP/UDP | KPasswd Server |
 | 636 | TCP | LDAP over SSL |
-| 3268 | TCP | Catalog | 
+| 3268 | TCP | Catalog Server | 
 | 3269 | TCP | Catalog over SSL | 
-| 50000 - 55000 | TCP | RPC |
+| 50000 - 55000 | TCP | MS RPC Services |
 
 
+# Examples
+
+Here are some example commands to run samba-ad-dc image. Please modify them for your system, and provide configuration files in volumes.
+
+samba-ad-dc with all ENV variables:
+```bash
+$ docker run --name samba-ad-dc  \
+    --cap-add SYS_ADMIN \
+    --env DNS_DOMAIN="my.domain.tld" \
+    --env DNS_FORWARDER="192.168.0.2" \
+    --env WORKGROUP="LOCAL" \
+    --env NETBIOS_NAME="DC01" \
+    --env DNS_BACKEND="SAMBA_INTERNAL" \
+    --env FUNCTION_LEVEL="2008_R2" \
+    --env ROLE="dc" \
+    --env BACKEND_STORE="tdb" \
+    --env ENABLE_USER_PROFILES=false \
+    --env ADMIN_PASSWORD="Str0ng_Passw0rd" \
+    linuxcrafts/samba-ad-dc:latest
+```
+
+samba-ad-dc with all volumes:
+```bash
+$ docker run --name samba-ad-dc  \
+    --cap-add SYS_ADMIN \
+    --volume /srv/samba:/samba  \
+    --volume /srv/bind-dns:/bind-dns  \
+    --volume /srv/ntp_signd:/ntp_signd
+    --volume /srv/users:/users \
+    linuxcrafts/samba-ad-dc:latest
+```
 
 
-## Troubleshooting
-* **Ports:** Ensure that the necessary ports are not being used by other services on your system. If any port conflicts occur, modify the port mapping in the docker run command.
+# Building the Image
+The image can be built using the following
+command:
+### Downloading required files
+```bash
+$ git clone https://github.com/LinuxCrafts/samba-ad-dc.git samba-ad-dc
+```
+
+### Building your custom image
+```bash
+$ docker build samba-ad-dc \
+    --build-arg VERSION="custom" \
+    --build-arg BUILD_DATE=$(date +%s) \
+    --tag samba-ad-dc:custom
+```
+
+### Preparing the Volumes
+```bash
+$ docker volume create --group SAMBA_VOLUMES
+$ docker volume create --group SAMBA_VOLUMES SAMBA_VOL
+$ docker volume create --group SAMBA_VOLUMES BIND9_ZONES 
+$ docker volume create --group SAMBA_VOLUMES NTP_SIGND 
+$ docker volume create --group SAMBA_VOLUMES ROAMING_PROFILES 
+```
+
+### Running the Image
+```bash
+$ docker run --name samba-ad-dc \
+    --cap-add SYS_ADMIN \
+    --volume SAMBA_VOL \
+    --env DNS_DOMAIN="my.domain.tld" \
+    --env ADMIN_PASSWORD="Str0ng_Passw0rd" \
+    samba-ad-dc:custom
+```
+
+
+# References
+* https://wiki.archlinux.org/title/Samba/Active_Directory_domain_controller
+* https://wiki.samba.org/index.php/Setting_up_Samba_as_an_Active_Directory_Domain_Controller
+
+# Other
+### Troubleshooting
+* **Ports:** Ensure that the necessary ports are not being used by other services on your system. 
 * **Network:** Make sure that container is using an static IP and it's not already in use in the network.
-* **Permissions:** Make sure that the Docker daemon has appropriate permissions to access the necessary directories and ports.
-* **Firewall:** If you're running a firewall, make sure it allows traffic on the required ports.
+* **Permissions:** Make sure that the Docker daemon has appropriate permissions to access the necessary directories and ports and `--cap-add SYS_ADMIN` was used.
 
 
-
-
-## Bug Tracker
+### Bug Tracker
 
 Bugs are tracked on [GitHub Issues](https://github.com/linuxcrafts/samba-dc-ac/issues).
 In case of trouble, please check there to see if your issue has already been reported.
 If you spotted it first, help us smash it by providing detailed and welcomed feedback.
 
-## Maintainer
+### Maintainer
 
 * Harol Hunter <hhuntercu.devops@gmail.com>
 
-## Contributing
+### Contributing
 Contributions to improve this Docker container are welcome! If you find any issues or have suggestions for enhancements, please submit a pull request or open an issue in the GitHub repository.
 
-## License
+### License
 This project is licensed under the [MIT License](https://opensource.org/licenses/MIT). Feel free to use, modify, and distribute this code for your own projects.
 
-## Disclaimer:
+### Disclaimer
 The Docker image repository is provided as-is, and users should review and understand the configurations and dependencies before deploying Samba AD DC instances in production environments.
