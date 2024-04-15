@@ -2,4 +2,4 @@
     path = /users/
     read only = no
     force create mode = 0600
-    force directory mode = 0700
+    force directory mode = 0700 
