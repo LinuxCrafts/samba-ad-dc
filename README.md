@@ -7,7 +7,9 @@ This Dockerfile and samba-ad-dc on Docker Hub image are based on Alpine Linux 3.
 
 
 Table of contents:
+
 1. [For Impatients](#for-impatients)
+1. [Features](#features)
 1. [Using samba-ad-dc from Docker Hub](#using-samba-ad-dc-image-on-docker-hub)
     * [Requirements](#requirements)
     * [Volumes](#volumes)
@@ -36,13 +38,33 @@ Are you itching to get your samba-ad-dc container up and running ASAP? Then this
 
 Minimal run
 ```bash
+$ docker volume create VOL_SAMBA
 $ docker run --name samba-ad-dc \
     --cap-add SYS_ADMIN \
-    --volume SAMBA_VOL \
+    --restart "always" \
+    --hostname DC01 \
+    --name samba-ad-dc \
+    --volume VOL_SAMBA \
     --env DNS_DOMAIN="my.domain.tld" \
     --env ADMIN_PASSWORD="Str0ng_Passw0rd" \
-    linuxcrafts/samba-ad-dc:latest
+    linuxcrafts/samba-ad-dc:latest setup-start
 ```
+
+# Features
+
+1. Dockerized Samba Server
+    * Containerized Deployment: Enjoy the benefits of containerization, ensuring consistency across different environments and simplifying the deployment process.
+1. Express SetUp for testing porpoises
+    * Out of the box solution for testing porpoises, no need to supply any parameter (`DON'T USE THIS MODE ON PRODUCTION ENVIROMENTS`)
+1. User-Friendly Configuration
+    * Simple Configuration: Configuration splitted in several configuration files, allowing you to easily tailor the setup to your specific requirements. 
+1. Volume Mounting
+External Volume Support 
+    * Seamlessly integrate with external volumes for persistent storage, ensuring data durability and easy backup and restore options.   
+1. Reverse DNS Automatic Setup
+    * Automated Reverse DNS Configuration: Simplify the setup process by automatically configuring reverse DNS for your Samba AD DC container.
+
+
 
 
 # Using samba-ad-dc image on Docker Hub
@@ -129,6 +151,7 @@ The following environment variables are available for your configuration:
 | FUNCTION_LEVEL | 2008_R2 | Domain and forest function level ( 2000, 2003, 2008, 2008_R2 )
 | BACKEND_STORE| tdb | Specify the database backend to be used |
 | ENABLE_ROAMING_PROFILES | false | Enable/Disable users roaming profiles |
+| ADMIN_PASSWORD | Admin*123 | Default Domain Password, `IT'S STRONGLY ADVICED` to provide your own password or change default inmediatly after initialized
 
 
 Samba will need a DNS Domain to work, if not supplied as ENV variable on running the container then this action will be taken in order until $DNS_DOMAIN is defined:
