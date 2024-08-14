@@ -1,9 +1,10 @@
 name: Build and Push Docker Image
 
+
 on:
   push:
-    tags:
-      - 'v*'          # Match tags starting with 'v'
+    branches:
+      - main  
   workflow_dispatch:  # Manually trigger the workflow
 
 jobs:
@@ -12,32 +13,32 @@ jobs:
     
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout
+
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin        
+
+      - name: Checkout latest release tag
+        run: |
+          LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1`)
+          git checkout $LATEST_TAG
         
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-        
-      - name: Log in to Docker Hub
-        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-        
+        uses: docker/setup-buildx-action
+
       - name: Build Docker Image
         run: |
           docker buildx build --platform linux/amd64,linux/arm64 \
-            --build-arg VERSION=$GITHUB_REF_NAME \
+            --build-arg VERSION=$LATEST_TAG \
             --build-arg BUILD_DATE=$(date +%s) \
             -t linuxcrafts/samba-ad-dc:latest \
-            -t linuxcrafts/samba-ad-dc:$GITHUB_REF_NAME \
+            -t linuxcrafts/samba-ad-dc:$LATEST_TAG \
             --push \
             .
-        env:
-          GITHUB_REF_NAME: ${{github.ref_name}}
       
       - name: Push Docker Image
         run: |
           echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
           docker push linuxcrafts/samba-ad-dc:latest
-          docker push linuxcrafts/samba-ad-dc:$GITHUB_REF_NAME
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-          GITHUB_REF_NAME: ${{github.ref_name}}
+          docker push linuxcrafts/samba-ad-dc:$LATEST_TAG
+

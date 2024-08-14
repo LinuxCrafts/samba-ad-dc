@@ -1,8 +1,7 @@
 #!/bin/sh
 # MIT License https://opensource.org/licenses/MIT
-# Copyright (c) LinuxCrafts <craftslinux@gmail.com>
-# Mantainer: Harol Hunter <hhuntercu.devops@gmail.com>
-
+# Copyright (c) Harol Hunter <hhuntercu.devops@gmail.com>
+# Mantainer: LinuxCrafts <craftslinux@gmail.com>
 
 ######################### DEFINITIONS #######################
 
