@@ -26,8 +26,8 @@ RUN export DEBIAN_FRONTEND=noninteractive && \
       mkdir /bind-dns && \
       mkdir -m 700 /users && \
       mkdir -m 750 /ntp_signd && \
-      rm -rf /var/cache/apt/archives/* && \
-      export -n DEBIAN_FRONTEND
+      rm -rf /var/cache/apt/archives/* 
+      # export -n DEBIAN_FRONTEND
 
 # Exposing DNS, KDC, LDAP, LDAPS, SMB, CATALOG, CATALOG over SSL, Random RPC ports
 EXPOSE 53 53/udp 88 88/udp 135 389 389/udp 445 464 464/udp 636 3268 3269 55000-55500

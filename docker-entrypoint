@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # MIT License https://opensource.org/licenses/MIT
 # Copyright (c) Harol Hunter <hhuntercu.devops@gmail.com>
 # Mantainer: LinuxCrafts <craftslinux@gmail.com>
@@ -359,7 +359,7 @@ function setup () {
     print_status $?
 
     # Samba needs to be running
-    echo -en "Starting samba ...\t\t\t\t\t\033[1;33m[WAIT]"
+    echo -en "Starting samba ...\t\t\t\t\t\t\t\033[1;33m[WAIT]"
     samba -D -s $SAMBA_CONFIG_FILE && \
     # Waiting for Samba DNS daemon to start 
     wait_for_samba_dns
@@ -368,8 +368,8 @@ function setup () {
     # Install ADMX Templates
     test_admx_templates
     if [[ $? -ne 0 ]]; then
-        echo -en "Installing ADMX Templates ...\t\t\t\t\033[1;33m[WAIT]"
-        install_admx_templates
+        echo -en "Installing ADMX Templates ...\t\t\t\t\t\t\033[1;33m[WAIT]"
+        #install_admx_templates
         print_status $?
     fi
 
